@@ -1,5 +1,9 @@
-﻿namespace SwishClient.Models
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
+
+namespace SwishClient.Models
 {
+    [JsonObject(NamingStrategyType = typeof(CamelCaseNamingStrategy))]
     public class PaymentRequestECommerceData
     {
         public string PayeePaymentReference { get; set; }

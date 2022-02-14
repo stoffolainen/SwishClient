@@ -1,36 +1,24 @@
-﻿using Newtonsoft.Json;
+﻿using Microsoft.Extensions.Options;
+using Newtonsoft.Json;
 using SwishClient.Contracts;
 using SwishClient.Models;
+using SwishClient.Options;
 using System;
 using System.Linq;
 using System.Net.Http;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace SwishClient.Clients
 {
     public class SwishClient : ISwishClient
     {
-        private readonly string baseUri;
-        private readonly string payeeAlias;
-        private readonly string callbackUrl;
-        private readonly string payeePaymentReference;
-        private readonly string currency;
-
+        private readonly ClientOptions options;
         private readonly HttpClient client;
 
-        public SwishClient(
-            string baseUri,
-            string callbackUrl,
-            string payeePaymentReference,
-            string payeeAlias,
-            string currency,
-            HttpClient client)
-        {            
-            this.baseUri = baseUri;
-            this.callbackUrl = callbackUrl;
-            this.payeeAlias = payeeAlias;
-            this.payeePaymentReference = payeePaymentReference;
-            this.currency = currency;
+        public SwishClient(IOptions<ClientOptions> options, HttpClient client)
+        {
+            this.options = options.Value;
             this.client = client;
         }
 
@@ -75,18 +63,21 @@ namespace SwishClient.Clients
         {
             try
             {
-                var content = new StringContent(JsonConvert.SerializeObject(new PaymentRequestECommerceData
-                {
-                    PayeePaymentReference = payeePaymentReference,
-                    CallbackUrl = callbackUrl,
-                    PayerAlias = phonenumber,
-                    PayeeAlias = payeeAlias,
-                    Amount = amount.ToString(),
-                    Currency = currency,
-                    Message = message
-                }));
+                var content = new StringContent(JsonConvert.SerializeObject(
+                    new PaymentRequestECommerceData
+                    {
+                        PayeePaymentReference = options.PayeePaymentReference,
+                        CallbackUrl = options.CallbackUrl,
+                        PayerAlias = phonenumber,
+                        PayeeAlias = options.PayeeAlias,
+                        Amount = amount.ToString(),
+                        Currency = options.Currency,
+                        Message = message
+                    }),
+                    Encoding.UTF8,
+                    "application/json");
 
-                var response = await client.PostAsync($"{baseUri}/swish-cpcapi/api/v1/paymentrequests", content);
+                var response = await client.PostAsync($"{options.BaseUri}/swish-cpcapi/api/v1/paymentrequests", content);
 
                 var errorMessage = string.Empty;
                 var location = string.Empty;
@@ -116,63 +107,6 @@ namespace SwishClient.Clients
                 return new PaymentRequestECommerceResponse()
                 {
                     Error = ex.ToString(),
-                    Location = ""
-                };
-            }
-        }
-
-        public async Task<PaymentRequestMCommerceResponse> MakePaymentRequestMCommerceAsync(int amount, string message)
-        {
-            try
-            {
-                var content = new StringContent(JsonConvert.SerializeObject(new PaymentRequestMCommerceData
-                {
-                    PayeePaymentReference = payeePaymentReference,
-                    CallbackUrl = callbackUrl,
-                    PayeeAlias = payeeAlias,
-                    Amount = amount.ToString(),
-                    Currency = currency,
-                    Message = message
-                }));
-
-                var response = await client.PostAsync($"{baseUri}/swish-cpcapi/api/v1/paymentrequests", content);
-
-                var errorMessage = string.Empty;
-                var PaymentRequestToken = string.Empty;
-                var Location = string.Empty;
-
-                if (response.IsSuccessStatusCode)
-                {
-                    var headers = response.Headers.ToList();
-
-                    if (headers.Any(x => x.Key == "PaymentRequestToken"))
-                    {
-                        PaymentRequestToken = response.Headers.GetValues("PaymentRequestToken").FirstOrDefault();
-                    }
-
-                    if (headers.Any(x => x.Key == "Location"))
-                    {
-                        Location = response.Headers.GetValues("Location").FirstOrDefault();
-                    }
-                }
-                else
-                {
-                    errorMessage = await response.Content.ReadAsStringAsync();
-                }
-
-                return new PaymentRequestMCommerceResponse()
-                {
-                    Error = errorMessage,
-                    Token = PaymentRequestToken,
-                    Location = Location
-                };
-            }
-            catch (Exception ex)
-            {
-                return new PaymentRequestMCommerceResponse()
-                {
-                    Error = ex.ToString(),
-                    Token = "",
                     Location = ""
                 };
             }
